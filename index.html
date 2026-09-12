@@ -127,7 +127,7 @@
   .form-card.open{ display:block; }
   .form-grid{
     display:grid;
-    grid-template-columns: 1.1fr 1fr 1fr 2fr auto;
+    grid-template-columns: 1fr 0.9fr 0.9fr 2.6fr auto;
     gap: 12px; align-items: end;
   }
   @media (max-width: 720px){ .form-grid{ grid-template-columns: 1fr 1fr; } }
@@ -160,7 +160,7 @@
   }
   .type-pill.Credit{ background: rgba(50,215,75,0.15); color: var(--credit); }
   .type-pill.Debit{ background: rgba(255,107,94,0.15); color: var(--debit); }
-  .remarks{ color: var(--text-secondary); max-width: 240px; }
+  .remarks{ color: var(--text-secondary); min-width: 220px; max-width: 340px; white-space: normal; word-break: break-word; line-height: 1.4; }
   .row-actions{ opacity: 0; transition: opacity 0.15s ease; }
   tbody tr:hover .row-actions{ opacity: 1; }
   .row-actions button{ padding: 4px 10px; font-size: 12px; }
