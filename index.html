@@ -324,10 +324,19 @@
   };
 
   let currentOpening = { balance: 0, date: '' };
+  let currentRows = [];
 
   function fmt(n){
     const num = Number(n) || 0;
-    return CONFIG.CURRENCY + num.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    return CONFIG.CURRENCY + Math.round(num).toLocaleString();
+  }
+
+  function toDisplayDate(iso){
+    if(!iso) return '—';
+    const parts = String(iso).split('-');
+    if(parts.length !== 3) return iso;
+    const [y, m, d] = parts;
+    return `${d}/${m}/${y}`;
   }
 
   function setSyncState(state, msg){
@@ -337,11 +346,12 @@
 
   function render(rows, opening){
     if(opening) currentOpening = opening;
+    currentRows = rows;
 
     const openingRow = `
       <tr>
         <td>—</td>
-        <td>${currentOpening.date || '—'}</td>
+        <td>${toDisplayDate(currentOpening.date)}</td>
         <td><span class="type-pill" style="background:rgba(10,132,255,0.15); color:var(--accent);">Opening</span></td>
         <td class="num">—</td>
         <td class="num">${fmt(currentOpening.balance)}</td>
@@ -355,7 +365,7 @@
       els.tbody.innerHTML = openingRow + rows.map(r => `
         <tr>
           <td>${r.serial}</td>
-          <td>${r.date}</td>
+          <td>${toDisplayDate(r.date)}</td>
           <td><span class="type-pill ${r.type}">${r.type}</span></td>
           <td class="num">${fmt(r.amount)}</td>
           <td class="num">${fmt(r.balance)}</td>
@@ -392,7 +402,19 @@
     }
   }
 
+  function computeOptimisticAdd(entry){
+    const rows = currentRows.slice();
+    const lastBalance = rows.length ? Number(rows[rows.length-1].balance) : Number(currentOpening.balance);
+    const amt = Number(entry.amount) || 0;
+    const balance = lastBalance + (entry.type === 'Credit' ? amt : -amt);
+    const serial = rows.length ? Number(rows[rows.length-1].serial) + 1 : 1;
+    rows.push({ serial, date: entry.date, type: entry.type, amount: amt, balance, remarks: entry.remarks });
+    return rows;
+  }
+
   async function addEntry(entry){
+    // show it immediately, sync quietly in the background
+    render(computeOptimisticAdd(entry), currentOpening);
     setSyncState('', 'Saving…');
     try{
       const res = await fetch(CONFIG.API_URL, {
@@ -411,6 +433,8 @@
 
   async function deleteEntry(serial){
     if(!confirm('Delete this entry? Balances will be recalculated.')) return;
+    // remove it immediately, sync quietly in the background
+    render(currentRows.filter(r => r.serial != serial), currentOpening);
     setSyncState('', 'Deleting…');
     try{
       const res = await fetch(CONFIG.API_URL, {
@@ -428,6 +452,8 @@
   }
 
   async function setOpening(balance, date){
+    // reflect it immediately, sync quietly in the background
+    render(currentRows, { balance, date });
     setSyncState('', 'Saving…');
     try{
       const res = await fetch(CONFIG.API_URL, {
@@ -451,7 +477,7 @@
     }
   });
 
-  els.saveEntryBtn.addEventListener('click', async () => {
+  els.saveEntryBtn.addEventListener('click', () => {
     const date = document.getElementById('fDate').value;
     const type = document.getElementById('fType').value;
     const amount = document.getElementById('fAmount').value;
@@ -462,11 +488,11 @@
       return;
     }
 
-    await addEntry({ date, type, amount: Number(amount), remarks });
-
     document.getElementById('fAmount').value = '';
     document.getElementById('fRemarks').value = '';
     els.formCard.classList.remove('open');
+
+    addEntry({ date, type, amount: Number(amount), remarks });
   });
 
   els.toggleOpeningBtn.addEventListener('click', () => {
@@ -477,15 +503,15 @@
     }
   });
 
-  els.saveOpeningBtn.addEventListener('click', async () => {
+  els.saveOpeningBtn.addEventListener('click', () => {
     const date = document.getElementById('oDate').value;
     const amount = document.getElementById('oAmount').value;
     if(!date || amount === ''){
       alert('Please enter both a date and an amount.');
       return;
     }
-    await setOpening(Number(amount), date);
     els.openingCard.classList.remove('open');
+    setOpening(Number(amount), date);
   });
 
   els.refreshBtn.addEventListener('click', loadData);
