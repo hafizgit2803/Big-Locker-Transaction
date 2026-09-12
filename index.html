@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locker Ledger</title>
+<style>
+  :root{
+    --glass-bg: rgba(255,255,255,0.55);
+    --glass-bg-strong: rgba(255,255,255,0.75);
+    --glass-border: rgba(255,255,255,0.6);
+    --glass-highlight: rgba(255,255,255,0.9);
+    --text-primary: #1C1E21;
+    --text-secondary: rgba(28,30,33,0.58);
+    --credit: #1A9F4C;
+    --debit: #E0453A;
+    --accent: #0A6FE0;
+    --radius: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html, body{
+    margin:0; padding:0; min-height:100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text-primary);
+    background:
+      radial-gradient(1100px 700px at 15% -10%, #C9DBFF88, transparent 60%),
+      radial-gradient(900px 600px at 110% 10%, #BDF1E888, transparent 55%),
+      radial-gradient(1000px 800px at 50% 120%, #E7D9FF88, transparent 60%),
+      linear-gradient(180deg, #F4F6FB 0%, #EDF1F8 50%, #F6F3FA 100%);
+    background-attachment: fixed;
+  }
+
+  .wrap{
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 20px 80px;
+  }
+
+  /* ---------- glass primitive ---------- */
+  .glass{
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    box-shadow:
+      0 1px 0 0 var(--glass-highlight) inset,
+      0 0 0 1px rgba(255,255,255,0.4),
+      0 20px 40px -20px rgba(30,40,70,0.18);
+    position: relative;
+  }
+  .glass::before{
+    content:"";
+    position:absolute; inset:0;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 40%);
+    pointer-events:none;
+  }
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    gap: 16px; margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .title-block h1{
+    margin:0; font-size: 28px; font-weight: 650; letter-spacing: -0.02em;
+  }
+  .title-block p{
+    margin: 4px 0 0; color: var(--text-secondary); font-size: 14px;
+  }
+  .sync-pill{
+    font-size: 12px; padding: 7px 13px; border-radius: 999px;
+    color: var(--text-secondary);
+  }
+  .sync-pill.ok{ color: var(--credit); }
+  .sync-pill.err{ color: var(--debit); }
+
+  /* ---------- balance hero ---------- */
+  .balance-card{
+    padding: 28px 32px;
+    margin-bottom: 22px;
+    display:flex; align-items:center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  }
+  .balance-card .label{ color: var(--text-secondary); font-size: 14px; margin-bottom: 6px; }
+  .balance-card .amount{ font-size: 44px; font-weight: 680; letter-spacing: -0.02em; }
+  .balance-card .amount.negative{ color: var(--debit); }
+  .balance-meta{ display:flex; gap: 28px; }
+  .balance-meta div .label{ margin-bottom: 4px; }
+  .balance-meta div .value{ font-size: 18px; font-weight: 600; }
+  .balance-meta .credit-total{ color: var(--credit); }
+  .balance-meta .debit-total{ color: var(--debit); }
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    display:flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;
+  }
+  button{
+    font-family: inherit; font-size: 14px; font-weight: 560;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    padding: 10px 18px;
+    border-radius: 12px;
+    cursor: pointer;
+    backdrop-filter: blur(20px);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  button:hover{ background: var(--glass-bg-strong); transform: translateY(-1px); }
+  button:active{ transform: translateY(0); }
+  button.primary{
+    background: linear-gradient(180deg, #1c8bff, #0A6FE0);
+    border-color: rgba(255,255,255,0.35);
+    color: white;
+  }
+  button.primary:hover{ background: linear-gradient(180deg, #2f95ff, #1178e6); }
+  button.danger-ghost{ color: var(--debit); }
+
+  /* ---------- add form ---------- */
+  .form-card{
+    padding: 22px 24px;
+    margin-bottom: 22px;
+    display: none;
+  }
+  .form-card.open{ display:block; }
+  .form-grid{
+    display:grid;
+    grid-template-columns: 1.1fr 1fr 1fr 2fr auto;
+    gap: 12px; align-items: end;
+  }
+  @media (max-width: 720px){ .form-grid{ grid-template-columns: 1fr 1fr; } }
+  .field label{ display:block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .field input, .field select{
+    width: 100%;
+    font-family: inherit; font-size: 14px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .field input::placeholder{ color: rgba(28,30,33,0.35); }
+  .field select{ appearance:none; }
+
+  /* ---------- table ---------- */
+  .table-card{ padding: 6px; overflow: hidden; }
+  table{ width:100%; border-collapse: collapse; font-size: 14px; }
+  thead th{
+    text-align:left; font-weight: 560; color: var(--text-secondary);
+    font-size: 12px; padding: 14px 16px; border-bottom: 1px solid var(--glass-border);
+  }
+  thead th.num, tbody td.num{ text-align:right; }
+  tbody td{ padding: 13px 16px; border-bottom: 1px solid rgba(28,30,33,0.08); vertical-align: top; }
+  tbody tr:last-child td{ border-bottom: none; }
+  tbody tr:hover{ background: rgba(255,255,255,0.4); }
+  .type-pill{
+    display:inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .type-pill.Credit{ background: rgba(50,215,75,0.15); color: var(--credit); }
+  .type-pill.Debit{ background: rgba(255,107,94,0.15); color: var(--debit); }
+  .remarks{ color: var(--text-secondary); max-width: 240px; }
+  .row-actions{ opacity: 0; transition: opacity 0.15s ease; }
+  tbody tr:hover .row-actions{ opacity: 1; }
+  .row-actions button{ padding: 4px 10px; font-size: 12px; }
+  .empty-state{ text-align:center; padding: 48px 20px; color: var(--text-secondary); }
+
+  footer{ text-align:center; margin-top: 26px; color: var(--text-secondary); font-size: 12px; }
+
+  /* ---------- print ---------- */
+  @media print{
+    @page{ size: A4; margin: 20mm 16mm; }
+    html, body{ background: #fff !important; color:#111 !important; }
+    .no-print{ display:none !important; }
+    .wrap{ max-width: none; padding: 0; }
+    .glass{
+      background:#fff !important; border: 1px solid #ccc !important;
+      backdrop-filter:none !important; box-shadow:none !important; border-radius: 8px;
+    }
+    .glass::before{ display:none; }
+    thead th{ color:#333 !important; border-bottom: 1px solid #999; }
+    tbody td{ border-bottom: 1px solid #ddd; }
+    .type-pill.Credit{ background:#e6f8ea !important; color:#137a2b !important; }
+    .type-pill.Debit{ background:#fde9e7 !important; color:#b32a1c !important; }
+    .remarks{ color:#444 !important; }
+    .balance-card .amount{ color:#111 !important; }
+    .balance-meta .credit-total{ color:#137a2b !important; }
+    .balance-meta .debit-total{ color:#b32a1c !important; }
+    .row-actions{ display:none !important; }
+    footer{ color:#666; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>Locker Ledger</h1>
+      <p id="subtitle">Cash movements while away — synced with Google Sheets</p>
+    </div>
+    <div class="sync-pill glass no-print" id="syncPill">Connecting…</div>
+  </header>
+
+  <section class="balance-card glass">
+    <div>
+      <div class="label">Current balance</div>
+      <div class="amount" id="finalBalance">৳0</div>
+    </div>
+    <div class="balance-meta">
+      <div>
+        <div class="label">Total credit</div>
+        <div class="value credit-total" id="totalCredit">৳0</div>
+      </div>
+      <div>
+        <div class="label">Total debit</div>
+        <div class="value debit-total" id="totalDebit">৳0</div>
+      </div>
+      <div>
+        <div class="label">Entries</div>
+        <div class="value" id="totalEntries">0</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="toolbar no-print">
+    <button class="primary" id="toggleFormBtn">+ Add transaction</button>
+    <button id="toggleOpeningBtn">Set opening balance</button>
+    <button id="refreshBtn">Refresh</button>
+    <button id="printBtn">Print / Save as PDF</button>
+  </div>
+
+  <div class="form-card glass no-print" id="openingCard">
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr auto;">
+      <div class="field">
+        <label>Opening balance date</label>
+        <input type="date" id="oDate">
+      </div>
+      <div class="field">
+        <label>Opening balance amount</label>
+        <input type="number" id="oAmount" placeholder="0.00" step="0.01">
+      </div>
+      <div class="field">
+        <button class="primary" id="saveOpeningBtn" style="width:100%;">Save opening balance</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card glass no-print" id="formCard">
+    <div class="form-grid">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="fDate">
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="fType">
+          <option value="Credit">Credit (deposit)</option>
+          <option value="Debit">Debit (withdrawal)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Amount</label>
+        <input type="number" id="fAmount" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="field">
+        <label>Remarks</label>
+        <input type="text" id="fRemarks" placeholder="e.g. Withdrawn for fabric payment to XYZ">
+      </div>
+      <div class="field">
+        <button class="primary" id="saveEntryBtn" style="width:100%;">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-card glass">
+    <table>
+      <thead>
+        <tr>
+          <th>S/N</th>
+          <th>Date</th>
+          <th>Type</th>
+          <th class="num">Amount</th>
+          <th class="num">Balance</th>
+          <th>Remarks</th>
+          <th class="no-print"></th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="7" class="empty-state">Loading transactions…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="no-print">Locker Ledger · data lives in your Google Sheet · print anytime for a paper record</footer>
+
+</div>
+
+<script>
+  // ======= CONFIGURE THIS =======
+  const CONFIG = {
+    API_URL: "https://script.google.com/macros/s/AKfycbwbc2QYbq2tTDEziQjvWRLrhfuaK-HZFDl--832YdLLf3moUtWk1ElLPtspKFLdnQcbLg/exec",
+    CURRENCY: "৳"
+  };
+  // ================================
+
+  const els = {
+    tbody: document.getElementById('tbody'),
+    finalBalance: document.getElementById('finalBalance'),
+    totalCredit: document.getElementById('totalCredit'),
+    totalDebit: document.getElementById('totalDebit'),
+    totalEntries: document.getElementById('totalEntries'),
+    syncPill: document.getElementById('syncPill'),
+    formCard: document.getElementById('formCard'),
+    toggleFormBtn: document.getElementById('toggleFormBtn'),
+    saveEntryBtn: document.getElementById('saveEntryBtn'),
+    refreshBtn: document.getElementById('refreshBtn'),
+    printBtn: document.getElementById('printBtn'),
+    openingCard: document.getElementById('openingCard'),
+    toggleOpeningBtn: document.getElementById('toggleOpeningBtn'),
+    saveOpeningBtn: document.getElementById('saveOpeningBtn'),
+  };
+
+  let currentOpening = { balance: 0, date: '' };
+
+  function fmt(n){
+    const num = Number(n) || 0;
+    return CONFIG.CURRENCY + num.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  function setSyncState(state, msg){
+    els.syncPill.className = "sync-pill glass no-print " + state;
+    els.syncPill.textContent = msg;
+  }
+
+  function render(rows, opening){
+    if(opening) currentOpening = opening;
+
+    const openingRow = `
+      <tr>
+        <td>—</td>
+        <td>${currentOpening.date || '—'}</td>
+        <td><span class="type-pill" style="background:rgba(10,132,255,0.15); color:var(--accent);">Opening</span></td>
+        <td class="num">—</td>
+        <td class="num">${fmt(currentOpening.balance)}</td>
+        <td class="remarks">Opening balance</td>
+        <td class="no-print"></td>
+      </tr>`;
+
+    if(!rows.length){
+      els.tbody.innerHTML = openingRow + '<tr><td colspan="7" class="empty-state">No transactions yet — add the first one above.</td></tr>';
+    } else {
+      els.tbody.innerHTML = openingRow + rows.map(r => `
+        <tr>
+          <td>${r.serial}</td>
+          <td>${r.date}</td>
+          <td><span class="type-pill ${r.type}">${r.type}</span></td>
+          <td class="num">${fmt(r.amount)}</td>
+          <td class="num">${fmt(r.balance)}</td>
+          <td class="remarks">${r.remarks || ''}</td>
+          <td class="no-print row-actions">
+            <button class="danger-ghost" onclick="deleteEntry(${r.serial})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    const credit = rows.filter(r => r.type === 'Credit').reduce((s,r)=>s+Number(r.amount||0),0);
+    const debit = rows.filter(r => r.type === 'Debit').reduce((s,r)=>s+Number(r.amount||0),0);
+    const balance = rows.length ? Number(rows[rows.length-1].balance) : Number(currentOpening.balance);
+
+    els.finalBalance.textContent = fmt(balance);
+    els.finalBalance.classList.toggle('negative', balance < 0);
+    els.totalCredit.textContent = fmt(credit);
+    els.totalDebit.textContent = fmt(debit);
+    els.totalEntries.textContent = rows.length;
+  }
+
+  async function loadData(){
+    setSyncState('', 'Syncing…');
+    try{
+      const res = await fetch(CONFIG.API_URL, { method: 'GET' });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Unknown error');
+      render(data.rows, data.opening);
+      setSyncState('ok', 'Synced ✓');
+    }catch(err){
+      console.error(err);
+      setSyncState('err', 'Sync failed — check API URL');
+    }
+  }
+
+  async function addEntry(entry){
+    setSyncState('', 'Saving…');
+    try{
+      const res = await fetch(CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'add', ...entry })
+      });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Unknown error');
+      render(data.rows, data.opening);
+      setSyncState('ok', 'Synced ✓');
+    }catch(err){
+      console.error(err);
+      setSyncState('err', 'Save failed — check API URL');
+    }
+  }
+
+  async function deleteEntry(serial){
+    if(!confirm('Delete this entry? Balances will be recalculated.')) return;
+    setSyncState('', 'Deleting…');
+    try{
+      const res = await fetch(CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'delete', serial })
+      });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Unknown error');
+      render(data.rows, data.opening);
+      setSyncState('ok', 'Synced ✓');
+    }catch(err){
+      console.error(err);
+      setSyncState('err', 'Delete failed — check API URL');
+    }
+  }
+
+  async function setOpening(balance, date){
+    setSyncState('', 'Saving…');
+    try{
+      const res = await fetch(CONFIG.API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'setOpening', balance, date })
+      });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || 'Unknown error');
+      render(data.rows, data.opening);
+      setSyncState('ok', 'Synced ✓');
+    }catch(err){
+      console.error(err);
+      setSyncState('err', 'Save failed — check API URL');
+    }
+  }
+
+  els.toggleFormBtn.addEventListener('click', () => {
+    els.formCard.classList.toggle('open');
+    if(els.formCard.classList.contains('open')){
+      document.getElementById('fDate').valueAsDate = new Date();
+    }
+  });
+
+  els.saveEntryBtn.addEventListener('click', async () => {
+    const date = document.getElementById('fDate').value;
+    const type = document.getElementById('fType').value;
+    const amount = document.getElementById('fAmount').value;
+    const remarks = document.getElementById('fRemarks').value;
+
+    if(!date || !amount || Number(amount) <= 0){
+      alert('Please enter a date and a valid amount.');
+      return;
+    }
+
+    await addEntry({ date, type, amount: Number(amount), remarks });
+
+    document.getElementById('fAmount').value = '';
+    document.getElementById('fRemarks').value = '';
+    els.formCard.classList.remove('open');
+  });
+
+  els.toggleOpeningBtn.addEventListener('click', () => {
+    els.openingCard.classList.toggle('open');
+    if(els.openingCard.classList.contains('open')){
+      document.getElementById('oDate').value = currentOpening.date || new Date().toISOString().slice(0,10);
+      document.getElementById('oAmount').value = currentOpening.balance || '';
+    }
+  });
+
+  els.saveOpeningBtn.addEventListener('click', async () => {
+    const date = document.getElementById('oDate').value;
+    const amount = document.getElementById('oAmount').value;
+    if(!date || amount === ''){
+      alert('Please enter both a date and an amount.');
+      return;
+    }
+    await setOpening(Number(amount), date);
+    els.openingCard.classList.remove('open');
+  });
+
+  els.refreshBtn.addEventListener('click', loadData);
+  els.printBtn.addEventListener('click', () => window.print());
+
+  loadData();
+</script>
+
+</body>
+</html>
